@@ -224,11 +224,20 @@ func (a *account) reset(nonce uint64, promoteCh chan<- promoteRequest) (
 
 // enqueue attempts tp push the transaction onto the enqueued queue.
 func (a *account) enqueue(tx *types.Transaction) error {
+	a.promoted.lock(true)
 	a.enqueued.lock(true)
-	defer a.enqueued.unlock()
+
+	defer func() {
+		a.enqueued.unlock()
+		a.promoted.unlock()
+	}()
 
 	if a.enqueued.length() == a.maxEnqueued {
 		return ErrMaxEnqueuedLimitReached
+	}
+
+	if a.doesNonceExist(tx.Nonce) {
+		return ErrNonceExists
 	}
 
 	// reject low nonce tx
@@ -326,4 +335,20 @@ func (a *account) getLowestTx() *types.Transaction {
 	}
 
 	return nil
+}
+
+func (a *account) doesNonceExist(nonce uint64) bool {
+	for _, tx := range a.enqueued.queue {
+		if tx.Nonce == nonce {
+			return true
+		}
+	}
+
+	for _, tx := range a.promoted.queue {
+		if tx.Nonce == nonce {
+			return true
+		}
+	}
+
+	return false
 }

@@ -59,6 +59,7 @@ var (
 	ErrTipAboveFeeCap          = errors.New("max priority fee per gas higher than max fee per gas")
 	ErrTipVeryHigh             = errors.New("max priority fee per gas higher than 2^256-1")
 	ErrFeeCapVeryHigh          = errors.New("max fee per gas higher than 2^256-1")
+	ErrNonceExists             = errors.New("transaction with nonce already exists in pool")
 )
 
 // indicates origin of a transaction
@@ -106,7 +107,8 @@ through their designated channels. */
 // This request is created for (new) transactions
 // that passed validation in addTx.
 type enqueueRequest struct {
-	tx *types.Transaction
+	tx      *types.Transaction
+	errChan chan error
 }
 
 // A promoteRequest is created each time some account
@@ -764,13 +766,18 @@ func (p *TxPool) addTx(origin txOrigin, tx *types.Transaction) error {
 	// initialize account for this address once
 	p.createAccountOnce(tx.From)
 
+	errChan := make(chan error, 1)
+	defer func() {
+		close(errChan)
+	}()
+
 	// send request [BLOCKING]
-	p.enqueueReqCh <- enqueueRequest{tx: tx}
+	p.enqueueReqCh <- enqueueRequest{tx: tx, errChan: errChan}
 	p.eventManager.signalEvent(proto.EventType_ADDED, tx.Hash)
 
 	metrics.SetGauge([]string{txPoolMetrics, "added_tx"}, 1)
 
-	return nil
+	return <-errChan
 }
 
 // handleEnqueueRequest attempts to enqueue the transaction
@@ -789,6 +796,7 @@ func (p *TxPool) handleEnqueueRequest(req enqueueRequest) {
 		p.logger.Error("enqueue request", "err", err)
 
 		p.index.remove(tx)
+		req.errChan <- err
 
 		return
 	}
@@ -804,9 +812,12 @@ func (p *TxPool) handleEnqueueRequest(req enqueueRequest) {
 	if tx.Nonce > account.getNonce() {
 		// don't signal promotion for
 		// higher nonce txs
+		req.errChan <- nil
+
 		return
 	}
 
+	req.errChan <- nil
 	p.promoteReqCh <- promoteRequest{account: addr} // BLOCKING
 }
 
