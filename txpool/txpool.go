@@ -766,7 +766,7 @@ func (p *TxPool) addTx(origin txOrigin, tx *types.Transaction) error {
 	// initialize account for this address once
 	p.createAccountOnce(tx.From)
 
-	errChan := make(chan error, 1)
+	errChan := make(chan error)
 	defer func() {
 		close(errChan)
 	}()

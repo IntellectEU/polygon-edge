@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -670,12 +671,56 @@ func TestEnqueueHandler(t *testing.T) {
 			// send tx
 			go func() {
 				err := pool.addTx(local, newTx(addr1, 10, 1)) // 10 < 20
-				assert.NoError(t, err)
+				assert.True(t, errors.Is(err, ErrNonceTooLow))
 			}()
 			pool.handleEnqueueRequest(<-pool.enqueueReqCh)
 
 			assert.Equal(t, uint64(0), pool.gauge.read())
 			assert.Equal(t, uint64(0), pool.accounts.get(addr1).enqueued.length())
+		},
+	)
+
+	t.Run(
+		"reject new tx with the same nonce",
+		func(t *testing.T) {
+			t.Parallel()
+
+			pool, err := newTestPool()
+			assert.NoError(t, err)
+			pool.SetSigner(&mockSigner{})
+
+			// setup prestate
+			acc := pool.createAccountOnce(addr1)
+			acc.setNonce(20)
+
+			var err1, err2 error
+			var wg sync.WaitGroup
+
+			// send tx1
+			wg.Add(1)
+			go func() {
+				err1 = pool.addTx(local, newTx(addr1, 21, 1))
+				wg.Done()
+			}()
+
+			// send tx2
+			wg.Add(1)
+			go func() {
+				err2 = pool.addTx(local, newTx(addr1, 21, 1))
+				wg.Done()
+			}()
+
+			pool.handleEnqueueRequest(<-pool.enqueueReqCh)
+			pool.handleEnqueueRequest(<-pool.enqueueReqCh)
+
+			wg.Wait()
+
+			// exactly one must return an error, the other one must succeed
+			require.True(t,
+				(errors.Is(err1, ErrNonceExists) && err2 == nil) || (err1 == nil && errors.Is(err2, ErrNonceExists)))
+
+			assert.Equal(t, uint64(1), pool.gauge.read())
+			assert.Equal(t, uint64(1), pool.accounts.get(addr1).enqueued.length())
 		},
 	)
 
@@ -746,9 +791,8 @@ func TestEnqueueHandler(t *testing.T) {
 
 			//	send next expected tx
 			go func() {
-				assert.NoError(t,
-					pool.addTx(local, newTx(addr1, 1, 1)),
-				)
+				err := pool.addTx(local, newTx(addr1, 1, 1))
+				assert.True(t, errors.Is(err, ErrMaxEnqueuedLimitReached))
 			}()
 
 			pool.handleEnqueueRequest(<-pool.enqueueReqCh)
