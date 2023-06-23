@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/spf13/cobra"
 	"github.com/umbracle/ethgo"
@@ -387,20 +386,6 @@ func runCommand(cmd *cobra.Command, _ []string) {
 		rootchainCfg.StateSenderAddress: blockNum,
 	}
 	consensusCfg.SupernetID = supernetID
-
-	// deploy token templates contracts to the genesis
-	chainConfig.Genesis.Alloc[contracts.ChildERC20Contract] = &chain.GenesisAccount{
-		Balance: big.NewInt(0),
-		Code:    contractsapi.ERC20TokenTemplate.DeployedBytecode,
-	}
-	chainConfig.Genesis.Alloc[contracts.ChildERC721Contract] = &chain.GenesisAccount{
-		Balance: big.NewInt(0),
-		Code:    contractsapi.ERC721TokenTemplate.DeployedBytecode,
-	}
-	chainConfig.Genesis.Alloc[contracts.ChildERC1155Contract] = &chain.GenesisAccount{
-		Balance: big.NewInt(0),
-		Code:    contractsapi.ERC1155TokenTemplate.DeployedBytecode,
-	}
 
 	// write updated consensus configuration
 	chainConfig.Params.Engine[polybft.ConsensusName] = consensusCfg

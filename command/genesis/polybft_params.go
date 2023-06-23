@@ -320,6 +320,21 @@ func (p *genesisParams) deployContracts(rewardTokenByteCode []byte,
 			address:  contracts.StateReceiverContract,
 		},
 		{
+			// ChildERC20 token contract
+			artifact: contractsapi.ERC20TokenTemplate,
+			address:  contracts.ChildERC20Contract,
+		},
+		{
+			// ChildERC721 token contract
+			artifact: contractsapi.ERC721TokenTemplate,
+			address:  contracts.ChildERC721Contract,
+		},
+		{
+			// ChildERC1155 token contract
+			artifact: contractsapi.ERC1155TokenTemplate,
+			address:  contracts.ChildERC1155Contract,
+		},
+		{
 			// BLS contract
 			artifact: contractsapi.BLS,
 			address:  contracts.BLSContract,
