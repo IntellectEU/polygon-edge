@@ -370,11 +370,6 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 	txRelayer, err := txrelayer.NewTxRelayer(txrelayer.WithClient(validatorSrv.JSONRPC()))
 	require.NoError(t, err)
 
-	// assert that all deposits are executed successfully.
-	// All deposits are sent using a single transaction, so arbitrary message bridge emits two state sync events:
-	// MAP_TOKEN_SIG and DEPOSIT_BATCH_SIG state sync events
-	checkStateSyncResultLogs(t, logs, 2)
-
 	// retrieve child token address
 	rootToChildTokenFn := contractsapi.ChildERC721Predicate.Abi.Methods["rootTokenToChildToken"]
 	input, err := rootToChildTokenFn.Encode([]interface{}{polybftCfg.Bridge.RootERC721Addr})
@@ -384,6 +379,16 @@ func TestE2E_Bridge_ERC721Transfer(t *testing.T) {
 	require.NoError(t, err)
 
 	childTokenAddr := types.StringToAddress(childTokenRaw)
+	t.Log("Child token", childTokenAddr)
+
+	bytecode, err := txRelayer.Client().Eth().GetCode(ethgo.Address(childTokenAddr), ethgo.Latest)
+	require.NoError(t, err)
+	t.Log("Child token bytecode", bytecode)
+
+	// assert that all deposits are executed successfully.
+	// All deposits are sent using a single transaction, so arbitrary message bridge emits two state sync events:
+	// MAP_TOKEN_SIG and DEPOSIT_BATCH_SIG state sync events
+	checkStateSyncResultLogs(t, logs, 2)
 
 	for i, receiver := range receiversAddrs {
 		owner := erc721OwnerOf(t, big.NewInt(int64(i)), childTokenAddr, txRelayer)
@@ -887,6 +892,12 @@ func TestE2E_Bridge_ChildChainMintableTokensTransfer(t *testing.T) {
 		require.True(t, ok)
 
 		childERC721 := mintableTokenMapped.ChildToken
+
+		t.Log("Child token address", childERC721)
+
+		childTokenByteCode, err := rootchainTxRelayer.Client().Eth().GetCode(ethgo.Address(childERC721), ethgo.Latest)
+		require.NoError(t, err)
+		t.Log("Child token code", childTokenByteCode)
 
 		// check owner on the rootchain
 		for i := uint64(0); i < transfersCount; i++ {
